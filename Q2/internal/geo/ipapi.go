@@ -50,9 +50,8 @@ func (api *IPAPI) Lookup(ctx context.Context, ip net.IP) (Location, bool, error)
 	api.mu.Lock()
 	if c, ok := api.cache[key]; ok {
 		api.mu.Unlock()
-		if !c.ok {
-			return Location{}, false, fmt.Errorf("cached error for %s", key)
-		}
+		// c.ok=false means ip-api answered "fail" (e.g. reserved range): same
+		// "no data" answer as the first lookup, not an error.
 		return c.loc, c.ok, nil
 	}
 	api.mu.Unlock()

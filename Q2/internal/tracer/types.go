@@ -25,10 +25,11 @@ const (
 	Unreachable            // ICMP 3 (e.g. admin-prohibited firewall)
 	TCPReset               // destination port closed
 	TCPSynAck              // destination port open
+	TCPAck                 // destination port open (plain ACK instead of SYN-ACK)
 )
 
 func (k ReplyKind) String() string {
-	return [...]string{"none", "time-exceeded", "unreachable", "rst", "syn-ack"}[k]
+	return [...]string{"none", "time-exceeded", "unreachable", "rst", "syn-ack", "ack"}[k]
 }
 
 // ProbeResult is the outcome of one probe.
@@ -44,7 +45,7 @@ type Hop struct {
 	TTL     int
 	Probes  []ProbeResult
 	Reached bool // destination answered at this TTL
-	Blocked bool // all probes got ICMP unreachable (e.g. firewall)
+	Blocked bool // all but at most one probe got ICMP unreachable (e.g. firewall)
 }
 
 // Done returns true if the trace is finished at this hop (destination answered or all probes blocked).
