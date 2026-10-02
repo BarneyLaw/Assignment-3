@@ -52,7 +52,6 @@ func Checksum(b []byte) uint16 {
 // IP total length. The pseudo-header is only fed into the checksum; it is
 // never transmitted.
 func pseudoHeader(src, dst net.IP, proto uint8, length uint16) []byte {
-	// TODO(you): implement. src/dst must be the 4-byte forms (ip.To4()).
 	var buf [12]byte
 	buf[0] = src[0]
 	buf[1] = src[1]
