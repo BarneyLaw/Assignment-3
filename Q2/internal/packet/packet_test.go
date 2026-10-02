@@ -110,3 +110,56 @@ func TestParseTCPRstAck(t *testing.T) {
 		t.Fatalf("got %+v", h)
 	}
 }
+
+// icmpTimeExceeded hand-assembles what a router sends back, minus the outer
+// IP header. opts are inserted into the quoted IP header to test IHL > 5.
+func icmpTimeExceeded(opts []byte) []byte {
+	ihl := byte(5 + len(opts)/4)
+	b := []byte{11, 0, 0, 0, 0, 0, 0, 0} // type, code, cksum, unused
+	b = append(b,
+		0x40|ihl, 0x00, 0x00, 0x28,
+		0x00, 0x01, 0x00, 0x00,
+		0x01, 0x06, 0x00, 0x00, // quoted TTL 1, proto TCP
+		192, 168, 1, 10,
+		1, 2, 3, 4)
+	b = append(b, opts...)
+	return append(b, 0x9c, 0x40, 0x00, 0x50, 0x12, 0x34, 0x56, 0x78)
+}
+
+func TestParseICMPTimeExceeded(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts []byte
+	}{
+		{"no options", nil},
+		{"with options", []byte{0x01, 0x01, 0x01, 0x00}}, // NOP NOP NOP EOL
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := ParseICMPError(icmpTimeExceeded(tc.opts))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if m.Type != ICMPTimeExceeded || m.Code != 0 ||
+				m.Inner.Protocol != ProtoTCP || !m.Inner.Dst.Equal(dstIP) ||
+				m.InnerSrcPort != 40000 || m.InnerDstPort != 80 ||
+				m.InnerSeq != 0x12345678 {
+				t.Fatalf("got %+v", m)
+			}
+		})
+	}
+}
+
+func TestParseICMPRejects(t *testing.T) {
+	if _, err := ParseICMPError([]byte{11, 0, 0}); !errors.Is(err, ErrShort) {
+		t.Errorf("short: err = %v, want ErrShort", err)
+	}
+	echo := icmpTimeExceeded(nil)
+	echo[0] = 0 // echo reply
+	if _, err := ParseICMPError(echo); !errors.Is(err, ErrNotICMPError) {
+		t.Errorf("echo reply: err = %v, want ErrNotICMPError", err)
+	}
+	trunc := icmpTimeExceeded(nil)
+	if _, err := ParseICMPError(trunc[:len(trunc)-4]); !errors.Is(err, ErrShort) {
+		t.Errorf("truncated TCP bytes: err = %v, want ErrShort", err)
+	}
+}
