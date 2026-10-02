@@ -33,7 +33,9 @@ def build_request() -> bytes:
         "",
         "",  # End of headers
     ]
-    return "\r\n".join(lines).encode("ascii")
+    request = "\r\n".join(lines).encode("ascii")
+    print(f"Built HTTP request:\n{request.decode('ascii')}")
+    return request
 
 def recv_all(sock) -> bytes:
     """Receive all data from the socket until the connection is closed."""
@@ -68,10 +70,13 @@ def decode_chunks(body: bytes) -> bytes:
 
 def parse_response(raw: bytes):
     """Split raw bytes into status code, headers dict and decoded body."""
+    print(f"Parsing HTTP response of {len(raw)} bytes...\n")
     head, _, body = raw.partition(b"\r\n\r\n")
     head_lines = head.decode("iso-8859-1").split("\r\n")
     
     status_code = int(head_lines[0].split(" ", 2)[1])
+
+    print(f"HTTP status code: {status_code}\n")
 
     headers = {}
 
@@ -85,10 +90,16 @@ def parse_response(raw: bytes):
         content_length = int(headers["content-length"])
         body = body[:content_length]
 
+    for header in headers:
+        print(f"{header}: {headers[header]}")
+        
+    print(f"HTTP body:\n{body.decode('utf-8', errors='replace')}\n")
+
     return status_code, headers, body
 
 def extract_ipv4(text: str):
     """Return the first valid dotted-quad IPv4 address in text."""
+    print("Extracting IPv4 address from response body...\n")
     for m in re.finditer(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b", text):
         if all(0 <= int(o) <= 255 for o in m.groups()):
             return m.group(0)
@@ -98,14 +109,19 @@ def extract_ipv4(text: str):
 
 def main():
     # 1. TCP connection, then wrap in TLS (SNI + certificate verification)
+    print("Creating SSL context...\n")
     context = ssl.create_default_context()
+    print(f"Connecting to {HOST}:{PORT}...\n")
     
     with socket.create_connection((HOST, PORT), timeout=10) as sock:
         with context.wrap_socket(sock, server_hostname=HOST) as ssock:
             # 2. Send the hand-built HTTP request
             ssock.sendall(build_request())
+            print("HTTP request sent.\n")
             # 3. Read the full response
+            print("Receiving HTTP response...\n")
             raw = recv_all(ssock)
+            print(f"Received {len(raw)} bytes of data.\n")
 
     # 4. Parse the HTTP response
     status, headers, body = parse_response(raw)
